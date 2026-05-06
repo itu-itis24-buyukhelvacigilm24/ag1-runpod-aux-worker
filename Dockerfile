@@ -54,6 +54,9 @@ RUN set -eux; \
 
 RUN python /tmp/patch_ag1_for_jax0418.py /opt/alphageometry
 
+RUN python -m pip install "jax[cuda11_pip]==0.4.18" \
+    -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
 RUN python -m pip install -r /tmp/ag1_worker_requirements.txt
 
 # Bake the checkpoint for the first remote-build path. In production, mount a
