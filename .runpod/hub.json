@@ -80,6 +80,10 @@
         }
       },
       {
+        "key": "MELIAD_ROOT",
+        "value": "/opt/meliad"
+      },
+      {
         "key": "XLA_PYTHON_CLIENT_PREALLOCATE",
         "value": "false"
       }

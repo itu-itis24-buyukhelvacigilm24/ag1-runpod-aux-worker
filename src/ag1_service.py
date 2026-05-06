@@ -23,7 +23,7 @@ BUILTIN_PROBLEMS: dict[str, str] = {
 class AG1AuxService:
     def __init__(self) -> None:
         self.ag1_repo = Path(os.environ.get("AG1_REPO", "/opt/alphageometry"))
-        self.meliad_root = Path(os.environ.get("MELIAD_ROOT", "/opt/meliad/meliad"))
+        self.meliad_root = Path(os.environ.get("MELIAD_ROOT", "/opt/meliad"))
         self.ckpt_dir = Path(os.environ.get("AG1_CKPT_DIR", "/opt/ag_ckpt_vocab_hf"))
         self.vocab_path = Path(
             os.environ.get("AG1_VOCAB_PATH", str(self.ckpt_dir / "geometry.757.model"))

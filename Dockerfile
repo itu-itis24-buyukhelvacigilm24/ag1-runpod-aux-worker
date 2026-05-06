@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PIP_NO_CACHE_DIR=1
 ENV XLA_PYTHON_CLIENT_PREALLOCATE=false
 ENV AG1_REPO=/opt/alphageometry
-ENV MELIAD_ROOT=/opt/meliad/meliad
+ENV MELIAD_ROOT=/opt/meliad
 ENV AG1_CKPT_DIR=/opt/ag_ckpt_vocab_hf
 ENV AG1_HF_REPO=abrahamabelboodala/ALPHAGEOMETRY_ag_ckpt_vocab
 
