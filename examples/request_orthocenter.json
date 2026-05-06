@@ -1,0 +1,8 @@
+{
+  "input": {
+    "problem_id": "orthocenter",
+    "beam_size": 4,
+    "batch_size": 4,
+    "sequence_length": 128
+  }
+}
