@@ -50,6 +50,7 @@ RUN set -eux; \
     cp ${SRC}/patches/patch_ag1_for_jax0418.py /tmp/patch_ag1_for_jax0418.py; \
     cp ${SRC}/requirements.txt /tmp/ag1_worker_requirements.txt; \
     mkdir -p /workspace/src; \
+    cp ${SRC}/handler.py /workspace/handler.py; \
     cp -R ${SRC}/src/. /workspace/src/
 
 RUN python /tmp/patch_ag1_for_jax0418.py /opt/alphageometry
@@ -60,7 +61,7 @@ RUN python -m pip install "jax[cuda11_pip]==0.4.18" \
 RUN python -m pip install -r /tmp/ag1_worker_requirements.txt
 
 RUN python -m pip check \
-    && python -m py_compile /workspace/src/handler.py /workspace/src/ag1_service.py
+    && python -m py_compile /workspace/handler.py /workspace/src/handler.py /workspace/src/ag1_service.py
 
 # Bake the checkpoint for the first remote-build path. In production, mount a
 # RunPod network volume and set AG1_CKPT_DIR to that cache path instead.
@@ -73,4 +74,4 @@ snapshot_download(
     local_dir_use_symlinks=False,
 )
 PY
-CMD ["python", "-u", "/workspace/src/handler.py"]
+CMD ["python", "-u", "/workspace/handler.py"]
