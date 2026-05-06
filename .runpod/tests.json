@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "name": "healthcheck_no_model_load",
+      "input": {
+        "healthcheck": true,
+        "load_model": false
+      },
+      "timeout": 30000
+    }
+  ],
+  "config": {
+    "gpuTypeId": "NVIDIA GeForce RTX 4090",
+    "gpuCount": 1,
+    "env": [
+      {
+        "key": "XLA_PYTHON_CLIENT_PREALLOCATE",
+        "value": "false"
+      }
+    ],
+    "allowedCudaVersions": [
+      "12.8",
+      "12.7",
+      "12.6",
+      "12.5",
+      "12.4",
+      "12.3",
+      "12.2",
+      "12.1",
+      "12.0"
+    ]
+  }
+}

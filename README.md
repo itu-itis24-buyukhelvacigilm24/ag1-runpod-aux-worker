@@ -1,5 +1,7 @@
 # AlphaGeometry 1 RunPod Aux Worker
 
+[![Runpod](https://api.runpod.io/badge/itu-itis24-buyukhelvacigilm24/ag1-runpod-aux-worker)](https://console.runpod.io/hub/itu-itis24-buyukhelvacigilm24/ag1-runpod-aux-worker)
+
 RunPod Serverless worker for the public AlphaGeometry 1 language model auxiliary
 construction step.
 

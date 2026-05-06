@@ -1,0 +1,87 @@
+{
+  "title": "AlphaGeometry 1 Aux Worker",
+  "description": "RunPod Serverless worker for AlphaGeometry 1 language-model auxiliary construction suggestions.",
+  "type": "serverless",
+  "category": "language",
+  "config": {
+    "runsOn": "GPU",
+    "containerDiskInGb": 40,
+    "gpuCount": 1,
+    "gpuIds": "ADA_24,ADA_48_PRO,AMPERE_24,AMPERE_48",
+    "allowedCudaVersions": [
+      "12.8",
+      "12.7",
+      "12.6",
+      "12.5",
+      "12.4",
+      "12.3",
+      "12.2",
+      "12.1",
+      "12.0"
+    ],
+    "presets": [
+      {
+        "name": "Default AG1 Aux Search",
+        "defaults": {
+          "AG1_BEAM_SIZE": 4,
+          "AG1_BATCH_SIZE": 4,
+          "AG1_SEQUENCE_LENGTH": 128,
+          "XLA_PYTHON_CLIENT_PREALLOCATE": "false"
+        }
+      }
+    ],
+    "env": [
+      {
+        "key": "AG1_HF_REPO",
+        "input": {
+          "name": "Checkpoint repository",
+          "type": "huggingface",
+          "description": "Hugging Face repository containing the public AlphaGeometry checkpoint and vocabulary.",
+          "default": "abrahamabelboodala/ALPHAGEOMETRY_ag_ckpt_vocab",
+          "required": true,
+          "advanced": true
+        }
+      },
+      {
+        "key": "AG1_BEAM_SIZE",
+        "input": {
+          "name": "Beam size",
+          "type": "number",
+          "description": "Number of auxiliary-construction beams to request.",
+          "min": 1,
+          "max": 16,
+          "default": 4,
+          "advanced": false
+        }
+      },
+      {
+        "key": "AG1_BATCH_SIZE",
+        "input": {
+          "name": "Batch size",
+          "type": "number",
+          "description": "AG1 generation batch size. Keep at 4 for first deployments.",
+          "min": 1,
+          "max": 16,
+          "default": 4,
+          "advanced": true
+        }
+      },
+      {
+        "key": "AG1_SEQUENCE_LENGTH",
+        "input": {
+          "name": "Sequence length",
+          "type": "number",
+          "description": "AG1 generation sequence length.",
+          "min": 64,
+          "max": 1024,
+          "default": 128,
+          "advanced": true
+        }
+      },
+      {
+        "key": "XLA_PYTHON_CLIENT_PREALLOCATE",
+        "value": "false"
+      }
+    ]
+  }
+}
