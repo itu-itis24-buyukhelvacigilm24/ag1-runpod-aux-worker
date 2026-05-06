@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN ln -sf /usr/bin/python3.10 /usr/local/bin/python \
     && ln -sf /usr/bin/pip3 /usr/local/bin/pip \
-    && python -m pip install --upgrade pip setuptools wheel
+    && python -m pip install --upgrade pip==25.2 setuptools==80.9.0 wheel==0.45.1
 
 ARG AG1_COMMIT=6777cb586cbb46beed28db12dc72c69770b68337
 ARG MELIAD_COMMIT=e8af0543441222c1c4c60d58803511f7cf92908b
@@ -58,6 +58,9 @@ RUN python -m pip install "jax[cuda11_pip]==0.4.18" \
     -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
 RUN python -m pip install -r /tmp/ag1_worker_requirements.txt
+
+RUN python -m pip check \
+    && python -m py_compile /workspace/src/handler.py /workspace/src/ag1_service.py
 
 # Bake the checkpoint for the first remote-build path. In production, mount a
 # RunPod network volume and set AG1_CKPT_DIR to that cache path instead.

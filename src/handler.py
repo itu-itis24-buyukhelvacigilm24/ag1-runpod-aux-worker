@@ -5,7 +5,10 @@ import traceback
 
 import runpod
 
-from ag1_service import AG1AuxService
+try:
+    from ag1_service import AG1AuxService
+except ModuleNotFoundError:  # Allows importing as src.handler from repo root.
+    from .ag1_service import AG1AuxService
 
 
 _SERVICE: AG1AuxService | None = None

@@ -113,8 +113,7 @@ Dockerfile build is the more controlled route for this specific AG1 model.
 You can check only Python syntax locally:
 
 ```powershell
-python -m py_compile .\experiments\geometry_solvers\ag1_runpod_serverless\src\ag1_service.py
-python -m py_compile .\experiments\geometry_solvers\ag1_runpod_serverless\src\handler.py
+python -m py_compile .\handler.py .\src\ag1_service.py .\src\handler.py
 ```
 
 Full model execution should run on Linux GPU. CPU execution works for syntax and
