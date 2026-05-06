@@ -83,12 +83,19 @@ def patch_float32(repo: Path) -> None:
             raise RuntimeError(f"Remaining bfloat16 reference in {rel}")
 
 
+def patch_headless_matplotlib(repo: Path) -> None:
+    path = repo / "numericals.py"
+    replace_optional(path, "matplotlib.use('TkAgg')", "matplotlib.use('Agg')")
+    replace_optional(path, 'matplotlib.use("TkAgg")', 'matplotlib.use("Agg")')
+
+
 def main() -> int:
     repo = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     if not (repo / "alphageometry.py").exists():
         raise FileNotFoundError(repo / "alphageometry.py")
     patch_alphageometry(repo)
     patch_float32(repo)
+    patch_headless_matplotlib(repo)
     print(f"Patched AG1 for JAX 0.4.18 at {repo}")
     return 0
 
