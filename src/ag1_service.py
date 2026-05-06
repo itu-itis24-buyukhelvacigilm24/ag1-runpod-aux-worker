@@ -25,6 +25,7 @@ class AG1AuxService:
         self.ag1_repo = Path(os.environ.get("AG1_REPO", "/opt/alphageometry"))
         self.meliad_root = Path(os.environ.get("MELIAD_ROOT", "/opt/meliad"))
         self.ckpt_dir = Path(os.environ.get("AG1_CKPT_DIR", "/opt/ag_ckpt_vocab_hf"))
+        self.ckpt_subdir = os.environ.get("AG1_CKPT_SUBDIR", "ag_ckpt_vocab")
         self.vocab_path = Path(
             os.environ.get("AG1_VOCAB_PATH", str(self.ckpt_dir / "geometry.757.model"))
         )
@@ -142,6 +143,20 @@ class AG1AuxService:
             local_dir_use_symlinks=False,
         )
         missing = [str(path) for path in required if not path.exists()]
+        if missing and self.ckpt_subdir:
+            nested = self.ckpt_dir / self.ckpt_subdir
+            nested_required = [
+                nested / "checkpoint_10999999",
+                nested / "geometry.757.model",
+                nested / "geometry.757.vocab",
+            ]
+            if all(path.exists() for path in nested_required):
+                self.ckpt_dir = nested
+                self.vocab_path = Path(
+                    os.environ.get("AG1_VOCAB_PATH", str(nested / "geometry.757.model"))
+                )
+                return
+            missing = [str(path) for path in nested_required if not path.exists()]
         if missing:
             raise FileNotFoundError(f"Checkpoint download did not create: {missing}")
 

@@ -80,6 +80,10 @@
         }
       },
       {
+        "key": "AG1_CKPT_SUBDIR",
+        "value": "ag_ckpt_vocab"
+      },
+      {
         "key": "MELIAD_ROOT",
         "value": "/opt/meliad"
       },
