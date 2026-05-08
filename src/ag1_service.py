@@ -34,16 +34,20 @@ class AG1AuxService:
         )
         self.default_beam_size = int(os.environ.get("AG1_BEAM_SIZE", "4"))
         self.default_batch_size = int(os.environ.get("AG1_BATCH_SIZE", "4"))
-        self.default_sequence_length = int(os.environ.get("AG1_SEQUENCE_LENGTH", "128"))
+        self.default_sequence_length = int(os.environ.get("AG1_SEQUENCE_LENGTH", "96"))
 
         self._ag = None
         self._model = None
         self._load_elapsed_sec: float | None = None
+        self._model_batch_size: int | None = None
+        self._model_sequence_length: int | None = None
 
     def healthcheck(self, load_model: bool = False) -> dict[str, Any]:
         data: dict[str, Any] = {
             "ok": True,
             "service": "ag1_aux_worker",
+            "model_role": "AG1 public auxiliary-construction LM, not full AG2 Gemini LM",
+            "public_parameter_count": "152M",
             "ag1_repo": str(self.ag1_repo),
             "meliad_root": str(self.meliad_root),
             "ckpt_dir": str(self.ckpt_dir),
@@ -63,9 +67,18 @@ class AG1AuxService:
         return data
 
     def handle(self, payload: dict[str, Any]) -> dict[str, Any]:
+        requested_beam_size = int(payload.get("beam_size", self.default_beam_size))
+        requested_batch_size = int(payload.get("batch_size", self.default_batch_size))
+        requested_sequence_length = int(payload.get("sequence_length", self.default_sequence_length))
+        # AG1/Meliad returns one candidate per configured batch slot. The
+        # public AlphaGeometry proof-search layer also calls its queue width
+        # "beam_size", but lm_inference.beam_decode() does not accept a
+        # per-call beam argument. Keep batch at least as large as requested
+        # beam or the worker silently cannot return enough candidates.
+        effective_batch_size = max(requested_batch_size, requested_beam_size)
         self.load(
-            batch_size=int(payload.get("batch_size", self.default_batch_size)),
-            sequence_length=int(payload.get("sequence_length", self.default_sequence_length)),
+            batch_size=effective_batch_size,
+            sequence_length=requested_sequence_length,
         )
         problems = self._resolve_problems(payload)
         started = time.perf_counter()
@@ -73,14 +86,24 @@ class AG1AuxService:
             self._probe_one(
                 problem_id=problem_id,
                 raw_problem=raw_problem,
-                beam_size=int(payload.get("beam_size", self.default_beam_size)),
+                beam_size=requested_beam_size,
             )
             for problem_id, raw_problem in problems
         ]
+        candidate_capacity = self._model_batch_size or 0
         return {
             "ok": True,
             "elapsed_sec": round(time.perf_counter() - started, 3),
             "load_elapsed_sec": self._load_elapsed_sec,
+            "model_role": "AG1 public auxiliary-construction LM, not full AG2 Gemini LM",
+            "public_parameter_count": "152M",
+            "requested_beam_size": requested_beam_size,
+            "requested_batch_size": requested_batch_size,
+            "effective_batch_size": effective_batch_size,
+            "model_batch_size": self._model_batch_size,
+            "model_sequence_length": self._model_sequence_length,
+            "candidate_capacity": candidate_capacity,
+            "beam_truncated": requested_beam_size > candidate_capacity,
             "count": len(results),
             "results": results,
         }
@@ -114,6 +137,8 @@ class AG1AuxService:
         ag.RULES = ag.pr.Theorem.from_txt_file(str(self.ag1_repo / "rules.txt"), to_dict=True)
         self._ag = ag
         self._model = ag.get_lm(str(self.ckpt_dir), str(self.vocab_path))
+        self._model_batch_size = int(getattr(self._model, "batch_size", batch_size or self.default_batch_size))
+        self._model_sequence_length = sequence_length or self.default_sequence_length
         self._load_elapsed_sec = round(time.perf_counter() - started, 3)
 
     def _check_paths(self) -> None:
@@ -256,19 +281,27 @@ class AG1AuxService:
         graph, _ = ag.gh.Graph.build_problem(problem, ag.DEFINITIONS)
         prompt = problem.setup_str_from_problem(ag.DEFINITIONS) + " {F1} x00"
         outputs = self._model.beam_decode(prompt, eos_tokens=[";"])
+        candidate_capacity = len(outputs.get("seqs_str", []))
+        truncated = beam_size > candidate_capacity
 
         rows: list[dict[str, Any]] = []
         for idx, (lm_out, score) in enumerate(zip(outputs["seqs_str"], outputs["scores"]), start=1):
             translation = ag.try_translate_constrained_to_construct(lm_out, graph)
             rows.append(
                 {
-                    "rank": idx,
+                    "raw_rank": idx,
                     "lm_output": lm_out,
                     "score": float(score),
                     "translation": translation,
                     "valid": not translation.startswith("ERROR:"),
                 }
             )
+        # Preserve AG1/Meliad output order. The score is an internal sequence
+        # value/loss and should not be treated as a stable cross-prompt ranking
+        # signal after grammar translation.
+        sorted_rows = list(rows)
+        for idx, row in enumerate(sorted_rows, start=1):
+            row["rank"] = idx
 
         return {
             "ok": True,
@@ -278,7 +311,10 @@ class AG1AuxService:
             "lm_prompt": prompt,
             "elapsed_sec": round(time.perf_counter() - started, 3),
             "beam_size_requested": beam_size,
-            "suggestions": rows[:beam_size],
+            "candidate_capacity": candidate_capacity,
+            "beam_truncated": truncated,
+            "suggestions": sorted_rows[:beam_size],
+            "suggestions_raw_order": rows,
         }
 
 

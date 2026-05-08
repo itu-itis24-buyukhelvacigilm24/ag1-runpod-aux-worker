@@ -20,7 +20,7 @@ Input:
     "problem_id": "orthocenter",
     "beam_size": 4,
     "batch_size": 4,
-    "sequence_length": 128
+    "sequence_length": 96
   }
 }
 ```
@@ -41,6 +41,10 @@ Output:
 {
   "ok": true,
   "elapsed_sec": 12.3,
+  "public_parameter_count": "152M",
+  "effective_batch_size": 4,
+  "candidate_capacity": 4,
+  "beam_truncated": false,
   "count": 1,
   "results": [
     {
@@ -58,6 +62,18 @@ Output:
   ]
 }
 ```
+
+Important runtime details:
+
+- This worker runs the public AG1 auxiliary-construction LM checkpoint, not the
+  full AG2 Gemini language-model/tree-search system from the AG2 paper.
+- The public AG1 generation config is the 152M parameter model.
+- AG1/Meliad returns one candidate per configured batch slot. Keep
+  `batch_size >= beam_size`; the worker now enforces this internally with
+  `effective_batch_size = max(batch_size, beam_size)`.
+- `rank` preserves the raw AG1 beam output order. The numeric `score` is kept
+  for diagnostics but is not used to reorder suggestions after grammar
+  translation.
 
 This does not solve metric length questions by itself. It proposes synthetic
 auxiliary constructions. A full geometry solver stack should still be:
@@ -94,7 +110,7 @@ AG1_HF_REPO=abrahamabelboodala/ALPHAGEOMETRY_ag_ckpt_vocab
 AG1_CKPT_DIR=/runpod-volume/ag1_ckpt_vocab_hf
 AG1_BEAM_SIZE=4
 AG1_BATCH_SIZE=4
-AG1_SEQUENCE_LENGTH=128
+AG1_SEQUENCE_LENGTH=96
 XLA_PYTHON_CLIENT_PREALLOCATE=false
 ```
 
