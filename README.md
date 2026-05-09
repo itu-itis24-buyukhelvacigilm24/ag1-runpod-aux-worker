@@ -20,7 +20,7 @@ Input:
     "problem_id": "orthocenter",
     "beam_size": 4,
     "batch_size": 4,
-    "sequence_length": 96
+    "sequence_length": 128
   }
 }
 ```
@@ -116,7 +116,7 @@ AG1_CKPT_DIR=/runpod-volume/ag1_ckpt_vocab_hf
 AG1_BEAM_SIZE=4
 AG1_BATCH_SIZE=4
 AG1_MIN_BATCH_SIZE=4
-AG1_SEQUENCE_LENGTH=96
+AG1_SEQUENCE_LENGTH=128
 AG1_TRANSLATION_RETRIES=12
 XLA_PYTHON_CLIENT_PREALLOCATE=false
 ```

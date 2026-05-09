@@ -27,7 +27,7 @@
           "AG1_BEAM_SIZE": 4,
           "AG1_BATCH_SIZE": 4,
           "AG1_MIN_BATCH_SIZE": 4,
-          "AG1_SEQUENCE_LENGTH": 96,
+          "AG1_SEQUENCE_LENGTH": 128,
           "AG1_TRANSLATION_RETRIES": 12,
           "XLA_PYTHON_CLIENT_PREALLOCATE": "false"
         }
@@ -89,7 +89,7 @@
           "description": "AG1 generation sequence length.",
           "min": 64,
           "max": 1024,
-          "default": 96,
+          "default": 128,
           "advanced": true
         }
       },

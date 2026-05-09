@@ -34,8 +34,8 @@ class AG1AuxService:
         )
         self.default_beam_size = int(os.environ.get("AG1_BEAM_SIZE", "4"))
         self.default_batch_size = int(os.environ.get("AG1_BATCH_SIZE", "4"))
-        self.min_batch_size = int(os.environ.get("AG1_MIN_BATCH_SIZE", "0"))
-        self.default_sequence_length = int(os.environ.get("AG1_SEQUENCE_LENGTH", "96"))
+        self.min_batch_size = int(os.environ.get("AG1_MIN_BATCH_SIZE", "4"))
+        self.default_sequence_length = int(os.environ.get("AG1_SEQUENCE_LENGTH", "128"))
         self.translation_retries = int(os.environ.get("AG1_TRANSLATION_RETRIES", "12"))
 
         self._ag = None
