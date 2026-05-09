@@ -70,10 +70,15 @@ Important runtime details:
 - The public AG1 generation config is the 152M parameter model.
 - AG1/Meliad returns one candidate per configured batch slot. Keep
   `batch_size >= beam_size`; the worker now enforces this internally with
-  `effective_batch_size = max(batch_size, beam_size)`.
+  `effective_batch_size = max(batch_size, beam_size, min_batch_size)`.
 - `rank` preserves the raw AG1 beam output order. The numeric `score` is kept
   for diagnostics but is not used to reorder suggestions after grammar
   translation.
+- AG1 validates a proposed construction by drawing it on a numeric sketch. Some
+  mathematically valid auxiliaries can fail one sketch with `PointTooCloseError`
+  or similar numeric errors. The worker retries only those transient numeric
+  validations with fresh AG1 sketches; grammar errors such as repeated-point
+  `P a b a f` are not retried.
 
 This does not solve metric length questions by itself. It proposes synthetic
 auxiliary constructions. A full geometry solver stack should still be:
@@ -110,7 +115,9 @@ AG1_HF_REPO=abrahamabelboodala/ALPHAGEOMETRY_ag_ckpt_vocab
 AG1_CKPT_DIR=/runpod-volume/ag1_ckpt_vocab_hf
 AG1_BEAM_SIZE=4
 AG1_BATCH_SIZE=4
+AG1_MIN_BATCH_SIZE=4
 AG1_SEQUENCE_LENGTH=96
+AG1_TRANSLATION_RETRIES=12
 XLA_PYTHON_CLIENT_PREALLOCATE=false
 ```
 

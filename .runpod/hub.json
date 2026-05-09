@@ -26,7 +26,9 @@
         "defaults": {
           "AG1_BEAM_SIZE": 4,
           "AG1_BATCH_SIZE": 4,
+          "AG1_MIN_BATCH_SIZE": 4,
           "AG1_SEQUENCE_LENGTH": 96,
+          "AG1_TRANSLATION_RETRIES": 12,
           "XLA_PYTHON_CLIENT_PREALLOCATE": "false"
         }
       }
@@ -68,6 +70,18 @@
         }
       },
       {
+        "key": "AG1_MIN_BATCH_SIZE",
+        "input": {
+          "name": "Minimum batch size",
+          "type": "number",
+          "description": "Keep the first loaded model large enough for future beam requests on reused workers.",
+          "min": 0,
+          "max": 16,
+          "default": 4,
+          "advanced": true
+        }
+      },
+      {
         "key": "AG1_SEQUENCE_LENGTH",
         "input": {
           "name": "Sequence length",
@@ -76,6 +90,18 @@
           "min": 64,
           "max": 1024,
           "default": 96,
+          "advanced": true
+        }
+      },
+      {
+        "key": "AG1_TRANSLATION_RETRIES",
+        "input": {
+          "name": "Translation retries",
+          "type": "number",
+          "description": "Retries for transient AG1 numeric sketch validation errors such as PointTooClose.",
+          "min": 1,
+          "max": 32,
+          "default": 12,
           "advanced": true
         }
       },
