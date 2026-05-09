@@ -37,6 +37,11 @@ class AG1AuxService:
         self.min_batch_size = int(os.environ.get("AG1_MIN_BATCH_SIZE", "4"))
         self.default_sequence_length = int(os.environ.get("AG1_SEQUENCE_LENGTH", "128"))
         self.translation_retries = int(os.environ.get("AG1_TRANSLATION_RETRIES", "12"))
+        self.build_graph_with_goal = os.environ.get("AG1_BUILD_GRAPH_WITH_GOAL", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
 
         self._ag = None
         self._model = None
@@ -289,7 +294,7 @@ class AG1AuxService:
 
         started = time.perf_counter()
         ag = self._ag
-        problem, graph, graph_attempts = self._build_problem_graph_robust(raw_problem)
+        problem, graph, graph_attempts, graph_meta = self._build_problem_graph_robust(raw_problem)
         prompt = problem.setup_str_from_problem(ag.DEFINITIONS) + " {F1} x00"
         outputs = self._model.beam_decode(prompt, eos_tokens=[";"])
         candidate_capacity = len(outputs.get("seqs_str", []))
@@ -326,6 +331,8 @@ class AG1AuxService:
             "candidate_capacity": candidate_capacity,
             "beam_truncated": truncated,
             "graph_build_attempts": graph_attempts,
+            "graph_build_mode": graph_meta.get("graph_build_mode"),
+            "goal_preflight": graph_meta.get("goal_preflight"),
             "translation_retries": self.translation_retries,
             "suggestions": sorted_rows[:beam_size],
             "suggestions_raw_order": rows,
@@ -351,14 +358,54 @@ class AG1AuxService:
         attempts = max(1, self.translation_retries)
         for attempt in range(1, attempts + 1):
             problem = self._ag.pr.Problem.from_txt(raw_problem, translate=True)
+            build_problem = problem
+            graph_build_mode = "with_goal"
+            if not self.build_graph_with_goal:
+                # AG1's Graph.build_problem loops until the theorem goal is
+                # numerically true. That is correct for AG1 theorem proving, but
+                # unsafe for our aux worker because research/full prompts can
+                # contain a metric proxy or a false broad synthetic goal. Build
+                # the proof-state graph without the goal, then report the goal
+                # truth separately so callers can reject bad prompts without a
+                # worker-level timeout.
+                build_problem = problem.copy()
+                build_problem.goal = None
+                graph_build_mode = "goal_safe_no_goal_loop"
             try:
-                graph, _ = self._ag.gh.Graph.build_problem(problem, self._ag.DEFINITIONS)
-                return problem, graph, attempt
+                graph, _ = self._ag.gh.Graph.build_problem(build_problem, self._ag.DEFINITIONS)
+                return problem, graph, attempt, {
+                    "graph_build_mode": graph_build_mode,
+                    "goal_preflight": self._goal_preflight(problem, graph),
+                }
             except Exception as exc:  # pragma: no cover - rare numeric path.
                 last_exc = exc
                 if not self._is_transient_numeric_translation_error(type(exc).__name__):
                     raise
         raise RuntimeError(f"AG1 graph build failed after {attempts} attempts: {last_exc!r}")
+
+    def _goal_preflight(self, problem: Any, graph: Any) -> dict[str, Any]:
+        goal = getattr(problem, "goal", None)
+        if goal is None:
+            return {"present": False}
+        record: dict[str, Any] = {
+            "present": True,
+            "goal": goal.name + " " + " ".join(goal.args),
+        }
+        try:
+            args = list(map(lambda x: graph.get(x, lambda: int(x)), goal.args))
+            record["args"] = [getattr(arg, "name", str(arg)) for arg in args]
+            try:
+                nm = importlib.import_module("numericals")
+                record["numeric_check"] = bool(nm.check(goal.name, args))
+            except Exception as exc:  # pragma: no cover - diagnostic only.
+                record["numeric_error"] = repr(exc)
+            try:
+                record["symbolic_check"] = bool(graph.check(goal.name, args))
+            except Exception as exc:  # pragma: no cover - diagnostic only.
+                record["symbolic_error"] = repr(exc)
+        except Exception as exc:
+            record["error"] = repr(exc)
+        return record
 
     def _translate_aux_robust(self, raw_problem: str, lm_out: str, initial_graph: Any) -> tuple[str, dict[str, Any]]:
         """Translate AG1 LM output with robust numeric validation."""
@@ -375,7 +422,7 @@ class AG1AuxService:
         last = first
         for attempt in range(2, attempts + 1):
             try:
-                _, graph, _ = self._build_problem_graph_robust(raw_problem)
+                _, graph, _, _ = self._build_problem_graph_robust(raw_problem)
                 translated = self._ag.try_translate_constrained_to_construct(lm_out, graph)
             except Exception as exc:  # pragma: no cover - defensive.
                 translated = "ERROR: " + repr(exc)
