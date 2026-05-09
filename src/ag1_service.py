@@ -34,7 +34,9 @@ class AG1AuxService:
         )
         self.default_beam_size = int(os.environ.get("AG1_BEAM_SIZE", "4"))
         self.default_batch_size = int(os.environ.get("AG1_BATCH_SIZE", "4"))
+        self.min_batch_size = int(os.environ.get("AG1_MIN_BATCH_SIZE", "0"))
         self.default_sequence_length = int(os.environ.get("AG1_SEQUENCE_LENGTH", "96"))
+        self.translation_retries = int(os.environ.get("AG1_TRANSLATION_RETRIES", "12"))
 
         self._ag = None
         self._model = None
@@ -75,7 +77,11 @@ class AG1AuxService:
         # "beam_size", but lm_inference.beam_decode() does not accept a
         # per-call beam argument. Keep batch at least as large as requested
         # beam or the worker silently cannot return enough candidates.
-        effective_batch_size = max(requested_batch_size, requested_beam_size)
+        effective_batch_size = max(
+            requested_batch_size,
+            requested_beam_size,
+            self.min_batch_size,
+        )
         self.load(
             batch_size=effective_batch_size,
             sequence_length=requested_sequence_length,
@@ -110,6 +116,12 @@ class AG1AuxService:
 
     def load(self, batch_size: int | None = None, sequence_length: int | None = None) -> None:
         if self._model is not None:
+            if batch_size and self._model_batch_size and batch_size > self._model_batch_size:
+                raise RuntimeError(
+                    "AG1 model is already loaded with batch_size="
+                    f"{self._model_batch_size}, but this request needs batch_size={batch_size}. "
+                    "Restart the worker or set AG1_MIN_BATCH_SIZE high enough before first load."
+                )
             return
 
         started = time.perf_counter()
@@ -277,8 +289,7 @@ class AG1AuxService:
 
         started = time.perf_counter()
         ag = self._ag
-        problem = ag.pr.Problem.from_txt(raw_problem, translate=True)
-        graph, _ = ag.gh.Graph.build_problem(problem, ag.DEFINITIONS)
+        problem, graph, graph_attempts = self._build_problem_graph_robust(raw_problem)
         prompt = problem.setup_str_from_problem(ag.DEFINITIONS) + " {F1} x00"
         outputs = self._model.beam_decode(prompt, eos_tokens=[";"])
         candidate_capacity = len(outputs.get("seqs_str", []))
@@ -286,7 +297,7 @@ class AG1AuxService:
 
         rows: list[dict[str, Any]] = []
         for idx, (lm_out, score) in enumerate(zip(outputs["seqs_str"], outputs["scores"]), start=1):
-            translation = ag.try_translate_constrained_to_construct(lm_out, graph)
+            translation, translation_meta = self._translate_aux_robust(raw_problem, lm_out, graph)
             rows.append(
                 {
                     "raw_rank": idx,
@@ -294,6 +305,7 @@ class AG1AuxService:
                     "score": float(score),
                     "translation": translation,
                     "valid": not translation.startswith("ERROR:"),
+                    **translation_meta,
                 }
             )
         # Preserve AG1/Meliad output order. The score is an internal sequence
@@ -313,8 +325,74 @@ class AG1AuxService:
             "beam_size_requested": beam_size,
             "candidate_capacity": candidate_capacity,
             "beam_truncated": truncated,
+            "graph_build_attempts": graph_attempts,
+            "translation_retries": self.translation_retries,
             "suggestions": sorted_rows[:beam_size],
             "suggestions_raw_order": rows,
+        }
+
+    @staticmethod
+    def _is_transient_numeric_translation_error(text: str) -> bool:
+        return any(
+            marker in text
+            for marker in [
+                "PointTooCloseError",
+                "PointTooFarError",
+                "InvalidLineIntersectError",
+            ]
+        )
+
+    def _build_problem_graph_robust(self, raw_problem: str):
+        """Build AG1 graph with retries for stochastic numeric sketches."""
+
+        if self._ag is None:
+            raise RuntimeError("AG1 module is not loaded.")
+        last_exc: Exception | None = None
+        attempts = max(1, self.translation_retries)
+        for attempt in range(1, attempts + 1):
+            problem = self._ag.pr.Problem.from_txt(raw_problem, translate=True)
+            try:
+                graph, _ = self._ag.gh.Graph.build_problem(problem, self._ag.DEFINITIONS)
+                return problem, graph, attempt
+            except Exception as exc:  # pragma: no cover - rare numeric path.
+                last_exc = exc
+                if not self._is_transient_numeric_translation_error(type(exc).__name__):
+                    raise
+        raise RuntimeError(f"AG1 graph build failed after {attempts} attempts: {last_exc!r}")
+
+    def _translate_aux_robust(self, raw_problem: str, lm_out: str, initial_graph: Any) -> tuple[str, dict[str, Any]]:
+        """Translate AG1 LM output with robust numeric validation."""
+
+        if self._ag is None:
+            raise RuntimeError("AG1 module is not loaded.")
+        attempts = max(1, self.translation_retries)
+        first = self._ag.try_translate_constrained_to_construct(lm_out, initial_graph)
+        if not first.startswith("ERROR:"):
+            return first, {"translation_attempts": 1, "translation_retry_reason": ""}
+        if not self._is_transient_numeric_translation_error(first):
+            return first, {"translation_attempts": 1, "translation_retry_reason": "non_retryable"}
+
+        last = first
+        for attempt in range(2, attempts + 1):
+            try:
+                _, graph, _ = self._build_problem_graph_robust(raw_problem)
+                translated = self._ag.try_translate_constrained_to_construct(lm_out, graph)
+            except Exception as exc:  # pragma: no cover - defensive.
+                translated = "ERROR: " + repr(exc)
+            if not translated.startswith("ERROR:"):
+                return translated, {
+                    "translation_attempts": attempt,
+                    "translation_retry_reason": "transient_numeric_sketch",
+                }
+            last = translated
+            if not self._is_transient_numeric_translation_error(translated):
+                return translated, {
+                    "translation_attempts": attempt,
+                    "translation_retry_reason": "became_non_retryable",
+                }
+        return last, {
+            "translation_attempts": attempts,
+            "translation_retry_reason": "transient_numeric_exhausted",
         }
 
 
